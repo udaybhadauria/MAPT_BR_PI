@@ -1,0 +1,22 @@
+####################################
+Wed Apr 15 15:32:16 EDT 2026
+####################################
+Applying MAP-T configuration from /root/BR_PI2
+Device 1 WAN MAC: 3c:82:c0:d9:9e:9a
+PSID              : 26
+IPv6 PD           : 2600:8809:a505:91a0::/60
+Full IPv6 Address : 2600:8809:a505:91a0:0:c0a8:c64:1a
+============================================
+config_ui.json updated successfully.
+Mapping file saved as /root/BR_PI2/mac_ipv6_mapping.txt
+JSON saved to /root/BR_PI2/output.json
+✅ All BR_PI configs generated successfully
+🧹 Removing duplicate MASQUERADE rules (ip6tables, eth0)
+Installing MAP-T IPv6 route...
+Flushing old permanent IPv6 neighbors on enx00249b59bf67 (safe scope)...
+Installing MAP-T neighbor entries...
+  → 2600:8809:a505:91a0:0:c0a8:c64:1a → 3c:82:c0:d9:9e:9a
+✅ MAP-T kernel state installed
+✅ Devices processed: 1
+🩺 Validating JOOL MAP-T configuration...
+❌ JOOL kernel modules are not loaded
