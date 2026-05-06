@@ -8,11 +8,11 @@ VENV_DIR="$BASE_DIR/ui_venv"
 PKGS=(
   curl tcpdump mosquitto mosquitto-clients jq yq iproute2 net-tools
   radvd kea-dhcp6-server kea-dhcp4-server apparmor-utils
-  iptables-persistent dibbler-client openssh-server python3-venv
+  iptables-persistent openssh-server python3-venv
 )
 
 SERVICES=(
-  kea-dhcp6-server kea-dhcp4-server radvd dibbler-client ssh mosquitto
+  kea-dhcp6-server kea-dhcp4-server radvd ssh mosquitto
 )
 
 log() {
