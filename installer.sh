@@ -139,9 +139,13 @@ EOF
 }
 
 configure_apparmor_and_kea() {
-  log "Setting Kea AppArmor profiles to complain mode"
-  aa-complain /usr/sbin/kea-dhcp6 || true
-  aa-complain /usr/sbin/kea-dhcp4 || true
+  if command -v aa-complain >/dev/null 2>&1; then
+    log "Setting Kea AppArmor profiles to complain mode"
+    aa-complain /usr/sbin/kea-dhcp6 || true
+    aa-complain /usr/sbin/kea-dhcp4 || true
+  else
+    log "Skipping AppArmor complain-mode step (aa-complain not available)"
+  fi
 
   log "Fixing Kea lease file permissions when present"
   shopt -s nullglob
@@ -180,7 +184,6 @@ main() {
   ensure_cmd systemctl
   ensure_cmd crontab
   ensure_cmd ss
-  ensure_cmd aa-complain
 
   log "Starting non-interactive installation from $BASE_DIR"
 
