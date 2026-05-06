@@ -1,10 +1,13 @@
 #!/bin/bash
 set -Eeuo pipefail
 
+SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0")"
+BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+
 ############################################
 # CONFIG
 ############################################
-MAP_FILE="/root/BR_PI2/mac_ipv6_mapping.txt"
+MAP_FILE="$BASE_DIR/mac_ipv6_mapping.txt"
 WAN_IF="eth0"
 TABLE_ID="252"
 TABLE_NAME="return"
