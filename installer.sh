@@ -4,6 +4,38 @@ set -euo pipefail
 SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0")"
 BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 VENV_DIR="$BASE_DIR/ui_venv"
+INSTALL_JOOL=1
+JOOL_FORCE=0
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --skip-jool)
+        INSTALL_JOOL=0
+        shift
+        ;;
+      --force-jool)
+        JOOL_FORCE=1
+        shift
+        ;;
+      -h|--help)
+        cat <<EOF
+Usage: sudo ./installer.sh [options]
+
+Options:
+  --skip-jool   Skip JOOL installation step
+  --force-jool  Pass --force to jool_installer.sh
+  -h, --help    Show this help message
+EOF
+        exit 0
+        ;;
+      *)
+        echo "ERROR: Unknown option: $1"
+        exit 1
+        ;;
+    esac
+  done
+}
 
 PKGS=(
   curl tcpdump mosquitto mosquitto-clients jq yq iproute2 net-tools
@@ -176,7 +208,29 @@ make_scripts_executable() {
   find "$BASE_DIR" -maxdepth 1 -type f -name "*.sh" -exec chmod +x {} \;
 }
 
+install_jool_if_enabled() {
+  if [[ "$INSTALL_JOOL" -eq 0 ]]; then
+    log "Skipping JOOL installation (--skip-jool)"
+    return
+  fi
+
+  local jool_installer="$BASE_DIR/jool_installer.sh"
+  if [[ ! -f "$jool_installer" ]]; then
+    echo "ERROR: Missing JOOL installer: $jool_installer"
+    exit 1
+  fi
+
+  log "Installing JOOL (MAP-T)"
+  if [[ "$JOOL_FORCE" -eq 1 ]]; then
+    bash "$jool_installer" --force
+  else
+    bash "$jool_installer"
+  fi
+}
+
 main() {
+  parse_args "$@"
+
   require_root
   ensure_cmd python3
   ensure_cmd apt-get
@@ -188,11 +242,12 @@ main() {
   log "Starting non-interactive installation from $BASE_DIR"
 
   install_apt_packages
+  make_scripts_executable
+  install_jool_if_enabled
   enable_and_start_services
   configure_mosquitto
   configure_forwarding
 
-  make_scripts_executable
   create_or_update_venv
   verify_python_deps
   configure_apparmor_and_kea
