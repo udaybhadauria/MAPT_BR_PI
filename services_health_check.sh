@@ -13,7 +13,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GENERATE_ROUTES_SCRIPT="$SCRIPT_DIR/generate_routes.sh"
 V6_RULE_PREFIX="2600:8809:a504::/46"
-MAPPING_FILE="/root/BR_PI2/mac_ipv6_mapping.txt"
+MAPPING_FILE="$SCRIPT_DIR/mac_ipv6_mapping.txt"
 
 echo "🔍 Checking service status..."
 
@@ -43,9 +43,104 @@ check_and_restart() {
     fi
 }
 
+has_iface_ipv4() {
+  local iface="$1"
+  ip -4 addr show dev "$iface" 2>/dev/null | grep -q "inet "
+}
+
+has_iface_ipv6_global() {
+  local iface="$1"
+  ip -6 addr show dev "$iface" scope global 2>/dev/null | grep -q "inet6 "
+}
+
+report_iface_state() {
+  local iface="$1"
+
+  if has_iface_ipv4 "$iface"; then
+    local ipv4
+    ipv4=$(ip -4 addr show dev "$iface" | awk '/inet / {print $2; exit}')
+    echo "✅ $iface IPv4 present: $ipv4"
+  else
+    echo "❌ $iface IPv4 missing"
+  fi
+
+  if has_iface_ipv6_global "$iface"; then
+    local ipv6
+    ipv6=$(ip -6 addr show dev "$iface" scope global | awk '/inet6/ {print $2; exit}')
+    echo "✅ $iface IPv6 global present: $ipv6"
+  else
+    echo "❌ $iface IPv6 global missing"
+  fi
+}
+
+recover_network_stack() {
+  local reason="$1"
+  echo "⚠️ $reason"
+
+  # Enable RA acceptance on WAN interface so kernel can pick up upstream IPv6
+  echo "🔧 Enabling accept_ra + autoconf on eth0"
+  sudo sysctl -w net.ipv6.conf.eth0.accept_ra=2 >/dev/null || true
+  sudo sysctl -w net.ipv6.conf.eth0.autoconf=1 >/dev/null || true
+
+  echo "🔧 Running: netplan apply"
+  sudo netplan apply || true
+
+  sleep 3
+
+  for svc in kea-dhcp4-server kea-dhcp6-server radvd; do
+    echo "🔁 Restarting $svc"
+    sudo systemctl restart "$svc" || true
+  done
+
+  sleep 5
+}
+
+iface_needs_recovery() {
+  local iface="$1"
+  # Recover if IPv4 OR IPv6 global is missing (not only when both are gone)
+  ! has_iface_ipv4 "$iface" || ! has_iface_ipv6_global "$iface"
+}
+
 check_and_restart kea-dhcp4-server
 check_and_restart kea-dhcp6-server
 check_and_restart radvd
+
+echo "---------------------------------------"
+echo "🔁 Checking WAN/LAN IPv4/IPv6 state..."
+
+echo "🔎 Pre-check eth0"
+report_iface_state eth0
+
+if [[ "$IFACE" != "eth0" ]]; then
+  echo "🔎 Pre-check $IFACE"
+  report_iface_state "$IFACE"
+fi
+
+NEEDS_RECOVERY=0
+if iface_needs_recovery eth0; then
+  NEEDS_RECOVERY=1
+fi
+if [[ "$IFACE" != "eth0" ]] && iface_needs_recovery "$IFACE"; then
+  NEEDS_RECOVERY=1
+fi
+
+if [[ $NEEDS_RECOVERY -eq 1 ]]; then
+  recover_network_stack "One or more interfaces missing IPv4 and/or IPv6 global"
+
+  echo "🔎 Post-recovery eth0"
+  report_iface_state eth0
+  if iface_needs_recovery eth0; then
+    restart_needed=1
+  fi
+
+  if [[ "$IFACE" != "eth0" ]]; then
+    echo "🔎 Post-recovery $IFACE"
+    report_iface_state "$IFACE"
+    if iface_needs_recovery "$IFACE"; then
+      restart_needed=1
+    fi
+  fi
+fi
 
 echo "---------------------------------------"
 echo "🔁 Checking forwarding settings..."

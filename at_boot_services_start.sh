@@ -1,7 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-LOG="/root/BR_PI/zboot_logs.log"
+SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0")"
+BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+LOG="$BASE_DIR/zboot_logs.log"
+mkdir -p "$(dirname "$LOG")"
+touch "$LOG"
 exec > >(tee -a "$LOG") 2>&1
 
 echo "###############################################################"

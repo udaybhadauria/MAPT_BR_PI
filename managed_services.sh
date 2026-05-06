@@ -1,13 +1,14 @@
 #!/bin/bash
 set -e
 
-BASE_DIR="/root/NAT_PI_2"
+SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0")"
+BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 VENV="$BASE_DIR/ui_venv"
 
-APP_PY="$BASE_DIR/app.py"
+APP_PY="$BASE_DIR/mqtt_agent.py"
 WATCHDOG_SH="$BASE_DIR/watchdog_routers.sh"
 
-APP_SERVICE="/etc/systemd/system/app-mqtt.service"
+APP_SERVICE="/etc/systemd/system/mqtt-agent.service"
 WATCHDOG_SERVICE="/etc/systemd/system/watchdog-routers.service"
 
 PYTHON="$VENV/bin/python"
@@ -29,7 +30,7 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 
 if [[ ! -f "$APP_PY" ]]; then
-  echo "❌ ERROR: mqtt_agent.py not found"
+  echo "❌ ERROR: mqtt_agent.py not found at $APP_PY"
   exit 1
 fi
 
@@ -41,25 +42,25 @@ fi
 chmod +x "$WATCHDOG_SH"
 
 # -----------------------------
-# Ensure Flask is installed
+# Ensure Python dependencies are installed
 # -----------------------------
-echo "📦 Checking Flask dependency..."
-if ! "$PYTHON" -c "import flask" 2>/dev/null; then
-  echo "⚠️ Flask not found in ui_venv — installing..."
-  "$PIP" install flask
+echo "📦 Checking MQTT/Flask dependencies..."
+if ! "$PYTHON" -c "import paho.mqtt.client, flask" 2>/dev/null; then
+  echo "⚠️ Dependencies missing in ui_venv — installing..."
+  "$PIP" install paho-mqtt flask
 else
-  echo "✅ Flask already installed in ui_venv"
+  echo "✅ Dependencies already installed in ui_venv"
 fi
 
 # -----------------------------
-# Create app.py systemd service
+# Create mqtt-agent systemd service
 # -----------------------------
 if [[ ! -f "$APP_SERVICE" ]]; then
-  echo "🛠 Creating app-mqtt.service..."
+  echo "🛠 Creating mqtt-agent.service..."
 
   cat > "$APP_SERVICE" <<EOF
 [Unit]
-Description=PI Python Application (Flask)
+Description=BR PI MQTT Agent (Python)
 After=network-online.target
 Wants=network-online.target
 
@@ -80,7 +81,7 @@ TimeoutStopSec=10
 WantedBy=multi-user.target
 EOF
 else
-  echo "✅ app-mqtt.service already exists"
+  echo "✅ mqtt-agent.service already exists"
 fi
 
 # -----------------------------
@@ -121,15 +122,15 @@ echo "🔄 Reloading systemd daemon..."
 systemctl daemon-reload
 
 echo "✅ Enabling services..."
-systemctl enable app-pi.service watchdog-routers.service
+systemctl enable mqtt-agent.service watchdog-routers.service
 
 echo "🚀 Restarting services..."
-systemctl restart app-pi.service watchdog-routers.service
+systemctl restart mqtt-agent.service watchdog-routers.service
 
 # -----------------------------
 # Status summary
 # -----------------------------
 echo
 echo "📊 Service status:"
-systemctl --no-pager --full status mqtt-pi.service watchdog-routers.service
+systemctl --no-pager --full status mqtt-agent.service watchdog-routers.service
 

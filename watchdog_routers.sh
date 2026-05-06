@@ -9,6 +9,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GENERATE_ROUTES_SCRIPT="$SCRIPT_DIR/generate_routes.sh"
 RETURN_POLICY_SCRIPT="$SCRIPT_DIR/return_policy.sh"
+START_KEA_SERVICES_SCRIPT="$SCRIPT_DIR/start_kea_services.sh"
 
 NORMAL_INTERVAL=30
 
@@ -34,9 +35,21 @@ apply_kernel_sysctls() {
   sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
 }
 
+restart_network_services() {
+  [[ -f "$START_KEA_SERVICES_SCRIPT" ]] || {
+    echo "❌ Missing script: $START_KEA_SERVICES_SCRIPT"
+    return 1
+  }
+
+  echo "⚙️  Running start_kea_services.sh"
+  bash "$START_KEA_SERVICES_SCRIPT"
+}
+
 apply_network_state() {
   [[ -f "$GENERATE_ROUTES_SCRIPT" ]] || { echo "❌ Missing script: $GENERATE_ROUTES_SCRIPT"; return 1; }
   [[ -f "$RETURN_POLICY_SCRIPT" ]] || { echo "❌ Missing script: $RETURN_POLICY_SCRIPT"; return 1; }
+
+  restart_network_services
 
   echo "⚙️  Running generate_routes.sh"
   bash "$GENERATE_ROUTES_SCRIPT"
