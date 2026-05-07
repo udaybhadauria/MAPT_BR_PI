@@ -197,6 +197,18 @@ install_from_packages_if_available() {
   if apt_pkg_available jool-tools && apt_pkg_available jool-dkms; then
     log "Installing JOOL from packages: jool-tools + jool-dkms"
     $SUDO apt-get install -y jool-tools jool-dkms
+
+    # Ubuntu packages can provide NAT64/SIIT only on some builds.
+    # MAP-T workflow requires both jool_mapt userspace CLI and kernel module.
+    if ! command -v jool_mapt >/dev/null 2>&1; then
+      warn "Apt package install does not provide jool_mapt CLI. Falling back to source build for MAP-T support."
+      return 1
+    fi
+    if ! modinfo jool_mapt >/dev/null 2>&1; then
+      warn "Apt package install does not provide jool_mapt kernel module metadata. Falling back to source build."
+      return 1
+    fi
+
     return 0
   fi
 
