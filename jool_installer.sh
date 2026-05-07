@@ -260,8 +260,9 @@ build_from_source() {
 
   log "Using JOOL source tree: $jool_src_dir"
   cd "$jool_src_dir"
-  git fetch --all --tags
-  git checkout mapt || true
+  git fetch origin mapt
+  git checkout mapt || die "Branch 'mapt' not found. Verify https://github.com/NICMx/Jool/tree/mapt is reachable."
+  git reset --hard origin/mapt
 
   log "Cleaning previous build artifacts..."
   make distclean || true
