@@ -18,9 +18,9 @@ bash "$BASE_DIR/generate_mac_ipv6.sh"
 
 bash "$BASE_DIR/generate_config.sh"
 
-bash "$BASE_DIR/generate_routes.sh"
-
 bash "$BASE_DIR/jool_apply.sh"
+
+bash "$BASE_DIR/generate_routes.sh"
 
 #bash "$BASE_DIR/start_kea_services.sh"
 
