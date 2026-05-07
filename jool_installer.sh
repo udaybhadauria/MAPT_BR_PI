@@ -202,10 +202,12 @@ install_from_packages_if_available() {
     # MAP-T workflow requires both jool_mapt userspace CLI and kernel module.
     if ! command -v jool_mapt >/dev/null 2>&1; then
       warn "Apt package install does not provide jool_mapt CLI. Falling back to source build for MAP-T support."
+      prepare_source_build_environment
       return 1
     fi
     if ! modinfo jool_mapt >/dev/null 2>&1; then
       warn "Apt package install does not provide jool_mapt kernel module metadata. Falling back to source build."
+      prepare_source_build_environment
       return 1
     fi
 
@@ -214,6 +216,31 @@ install_from_packages_if_available() {
 
   warn "JOOL packages (jool-tools/jool-dkms) not available in apt. Falling back to source build."
   return 1
+}
+
+prepare_source_build_environment() {
+  local running_kernel
+  running_kernel="$(uname -r)"
+
+  log "Preparing clean environment for source MAP-T build"
+
+  # Remove potentially incompatible, already-loaded JOOL modules.
+  $SUDO modprobe -r jool_mapt 2>/dev/null || true
+  $SUDO modprobe -r jool_siit 2>/dev/null || true
+  $SUDO modprobe -r jool 2>/dev/null || true
+  $SUDO modprobe -r jool_common 2>/dev/null || true
+
+  # If apt JOOL DKMS is installed, purge it to avoid loading mixed module families.
+  if dpkg -s jool-dkms >/dev/null 2>&1; then
+    warn "Purging jool-dkms to avoid kernel symbol conflicts with source-built MAP-T modules"
+    $SUDO apt-get purge -y jool-dkms
+  fi
+
+  # Cleanup residual JOOL modules from dkms and updates directories, then refresh deps.
+  $SUDO find "/lib/modules/${running_kernel}" -type f \
+    \( -path "*/updates/dkms/jool*.ko*" -o -path "*/updates/jool*.ko*" -o -path "*/extra/jool*.ko*" \) \
+    -delete 2>/dev/null || true
+  $SUDO depmod -a
 }
 
 build_from_source() {
@@ -257,9 +284,9 @@ build_from_source() {
   make -j"$(nproc)"
   $SUDO make install
 
-  log "Installing kernel modules into updates dir..."
+  log "Installing kernel modules into extra dir..."
   local update_dir
-  update_dir="/lib/modules/${running_kernel}/updates"
+  update_dir="/lib/modules/${running_kernel}/extra/jool-mapt"
   $SUDO mkdir -p "$update_dir"
 
   local modules=(
