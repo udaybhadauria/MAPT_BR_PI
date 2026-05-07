@@ -1,13 +1,15 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR=$(dirname "$(realpath "$0")")
+
 ################################
 # INPUTS
 ################################
 
 LAN_IF=$(ip -o link show | awk -F': ' '/: (enx|eth1)/ {print $2; exit}')
 V6_RULE_PREFIX="2600:8809:a504::/46"
-MAPPING_FILE="/root/BR_PI2/mac_ipv6_mapping.txt"
+MAPPING_FILE="$SCRIPT_DIR/mac_ipv6_mapping.txt"
 
 METRIC=1024
 PREF="medium"
