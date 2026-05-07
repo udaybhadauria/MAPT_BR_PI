@@ -12,6 +12,7 @@ FORCE_MODE=0
 if [[ "${1:-}" == "--force" ]]; then
   FORCE_MODE=1
 fi
+JOOL_SRC_DIR="${JOOL_SRC_DIR:-$HOME/Jool}"
 
 log()   { echo "[INFO] $*"; }
 warn()  { echo "[WARN] $*"; }
@@ -246,17 +247,19 @@ prepare_source_build_environment() {
 build_from_source() {
   local running_kernel
   local kdir
+  local jool_src_dir
 
   running_kernel="$(uname -r)"
   kdir="/lib/modules/${running_kernel}/build"
+  jool_src_dir="$JOOL_SRC_DIR"
 
-  cd "$HOME"
-  if [[ ! -d "Jool/.git" ]]; then
-    log "Cloning JOOL repository..."
-    git clone https://github.com/NICMx/Jool.git
+  if [[ ! -d "$jool_src_dir/.git" ]]; then
+    log "Cloning JOOL repository into $jool_src_dir"
+    git clone https://github.com/NICMx/Jool.git "$jool_src_dir"
   fi
 
-  cd "$HOME/Jool"
+  log "Using JOOL source tree: $jool_src_dir"
+  cd "$jool_src_dir"
   git fetch --all --tags
   git checkout mapt || true
 
@@ -268,7 +271,7 @@ build_from_source() {
   ./configure --with-linux="$kdir"
 
   log "Building JOOL kernel modules..."
-  cd "$HOME/Jool/src/mod"
+  cd "$jool_src_dir/src/mod"
   local module
   for module in common siit nat64 mapt; do
     log "Building module: ${module}"
@@ -280,7 +283,7 @@ build_from_source() {
   done
 
   log "Building/installing userland binaries..."
-  cd "$HOME/Jool"
+  cd "$jool_src_dir"
   make -j"$(nproc)"
   $SUDO make install
 
@@ -290,10 +293,10 @@ build_from_source() {
   $SUDO mkdir -p "$update_dir"
 
   local modules=(
-    "$HOME/Jool/src/mod/common/jool_common.ko"
-    "$HOME/Jool/src/mod/siit/jool_siit.ko"
-    "$HOME/Jool/src/mod/nat64/jool.ko"
-    "$HOME/Jool/src/mod/mapt/jool_mapt.ko"
+    "$jool_src_dir/src/mod/common/jool_common.ko"
+    "$jool_src_dir/src/mod/siit/jool_siit.ko"
+    "$jool_src_dir/src/mod/nat64/jool.ko"
+    "$jool_src_dir/src/mod/mapt/jool_mapt.ko"
   )
 
   local ko
@@ -309,6 +312,12 @@ build_from_source() {
 load_and_verify() {
   log "Refreshing module dependencies..."
   $SUDO depmod -a
+
+  # Ensure we are not reusing previously loaded incompatible JOOL modules.
+  $SUDO modprobe -r jool_mapt 2>/dev/null || true
+  $SUDO modprobe -r jool_siit 2>/dev/null || true
+  $SUDO modprobe -r jool 2>/dev/null || true
+  $SUDO modprobe -r jool_common 2>/dev/null || true
 
   # Verify userspace tools exist and respond.
   command -v jool >/dev/null 2>&1 || die "JOOL CLI binary not found in PATH"
