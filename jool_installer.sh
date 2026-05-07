@@ -80,6 +80,25 @@ install_base_dependencies() {
     linux-headers-"$(uname -r)"
 }
 
+resolve_header_release() {
+  local kdir="$1"
+  local rel=""
+
+  if [[ -f "$kdir/include/generated/utsrelease.h" ]]; then
+    rel="$(sed -n 's/^#define UTS_RELEASE "\(.*\)"/\1/p' "$kdir/include/generated/utsrelease.h" | head -n1)"
+  fi
+
+  if [[ -z "$rel" && -f "$kdir/include/config/kernel.release" ]]; then
+    rel="$(head -n1 "$kdir/include/config/kernel.release" 2>/dev/null || true)"
+  fi
+
+  if [[ -z "$rel" ]]; then
+    rel="$(make -s -C "$kdir" kernelrelease 2>/dev/null || true)"
+  fi
+
+  echo "$rel"
+}
+
 ensure_kernel_headers_valid() {
   local running_kernel
   local kdir
@@ -149,9 +168,8 @@ EOF
     die "Kernel headers are still missing for ${running_kernel}."
   fi
 
-  if ! header_kernel="$(make -s -C "$kdir" kernelrelease 2>/dev/null)"; then
-    die "Unable to read header kernelrelease from ${kdir}. Headers are invalid or incomplete."
-  fi
+  header_kernel="$(resolve_header_release "$kdir")"
+  [[ -n "$header_kernel" ]] || die "Unable to resolve header release from ${kdir}. Headers are invalid or incomplete."
 
   if [[ "$header_kernel" != "$running_kernel" ]]; then
     cat >&2 <<EOF
