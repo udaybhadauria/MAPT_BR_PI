@@ -147,14 +147,17 @@ configure_apparmor_and_kea() {
     log "Skipping AppArmor complain-mode step (aa-complain not available)"
   fi
 
-  log "Fixing Kea lease file permissions when present"
-  shopt -s nullglob
-  local lease_files=(/var/lib/kea/kea-leases*.csv)
-  if (( ${#lease_files[@]} > 0 )); then
-    chmod 640 "${lease_files[@]}"
-    chown _kea:_kea "${lease_files[@]}"
-  fi
-  shopt -u nullglob
+  log "Creating Kea lease directory"
+  mkdir -p /var/lib/kea
+
+  log "Pre-creating Kea lease files with correct permissions"
+  touch /var/lib/kea/dhcp4.leases
+  chown _kea:_kea /var/lib/kea/dhcp4.leases
+  chmod 640 /var/lib/kea/dhcp4.leases
+
+  touch /var/lib/kea/dhcp6.leases
+  chown _kea:_kea /var/lib/kea/dhcp6.leases
+  chmod 640 /var/lib/kea/dhcp6.leases
 
   log "Fixing Kea config file permissions"
   if [[ -f /etc/kea/kea-dhcp4.conf ]]; then
@@ -169,6 +172,15 @@ configure_apparmor_and_kea() {
   log "Validating Kea configurations"
   [[ -f /etc/kea/kea-dhcp4.conf ]] && kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
   [[ -f /etc/kea/kea-dhcp6.conf ]] && kea-dhcp6 -t /etc/kea/kea-dhcp6.conf
+
+  log "Restarting Kea services to apply configuration"
+  systemctl restart kea-dhcp4-server
+  systemctl restart kea-dhcp6-server
+  systemctl restart radvd
+
+  log "Verifying Kea services restarted successfully"
+  systemctl is-active --quiet kea-dhcp4-server || { echo "ERROR: kea-dhcp4-server failed to restart"; exit 1; }
+  systemctl is-active --quiet kea-dhcp6-server || { echo "ERROR: kea-dhcp6-server failed to restart"; exit 1; }
 }
 
 make_scripts_executable() {
@@ -202,6 +214,9 @@ main() {
 
   log "Configuring cron schedule"
   bash "$BASE_DIR/scheduler_cron.sh"
+
+  log "Setting up root password (for direct root login if needed)"
+  passwd root
 
   echo
   echo "======================================"
