@@ -203,24 +203,27 @@ load_and_verify() {
   log "Refreshing module dependencies..."
   $SUDO depmod -a
 
-  local mod
-  for mod in jool_common jool jool_siit jool_mapt; do
-    if ! $SUDO modprobe "$mod"; then
-      warn "Unable to load module: $mod"
-    fi
-  done
+  # Verify userspace tools exist and respond.
+  command -v jool >/dev/null 2>&1 || die "JOOL CLI binary not found in PATH"
+  command -v jool_mapt >/dev/null 2>&1 || die "jool_mapt binary not found in PATH"
+  jool --version >/dev/null 2>&1 || die "JOOL CLI is present but not working"
+  jool_mapt --help >/dev/null 2>&1 || die "jool_mapt CLI is present but not working"
 
-  if command -v jool >/dev/null 2>&1; then
-    log "JOOL binary installed: $(jool --version 2>/dev/null || echo 'version check failed')"
-  else
-    warn "JOOL CLI binary not found in PATH"
-  fi
+  # Verify kernel modules are installed in module tree.
+  modinfo jool_common >/dev/null 2>&1 || die "Kernel module metadata missing: jool_common"
+  modinfo jool >/dev/null 2>&1 || die "Kernel module metadata missing: jool"
+  modinfo jool_mapt >/dev/null 2>&1 || die "Kernel module metadata missing: jool_mapt"
 
-  if lsmod | grep -Eq '^jool|^jool_mapt|^jool_common'; then
-    log "At least one JOOL kernel module is loaded."
-  else
-    warn "No JOOL kernel modules are loaded."
-  fi
+  # Load required modules and confirm they are resident.
+  $SUDO modprobe jool_common || die "Failed to load module: jool_common"
+  $SUDO modprobe jool || die "Failed to load module: jool"
+  $SUDO modprobe jool_mapt || die "Failed to load module: jool_mapt"
+
+  lsmod | awk '{print $1}' | grep -qx 'jool_common' || die "Module not loaded after modprobe: jool_common"
+  lsmod | awk '{print $1}' | grep -qx 'jool' || die "Module not loaded after modprobe: jool"
+  lsmod | awk '{print $1}' | grep -qx 'jool_mapt' || die "Module not loaded after modprobe: jool_mapt"
+
+  log "JOOL userspace tools and kernel modules verified successfully."
 }
 
 main() {
