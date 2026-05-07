@@ -1,9 +1,0 @@
-{
-  "timestamp": 1776092749,
-  "services": {
-    "dhcp4": "active",
-    "dhcp6": "active",
-    "radvd": "active",
-    "jool": "active"
-  }
-}

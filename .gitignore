@@ -1,0 +1,12 @@
+# Runtime log files — generated at boot/cron time on the Pi
+zboot_logs.log
+
+# Runtime state snapshots
+services_status.json
+status.json
+
+# Python venv — recreated by installer.sh
+ui_venv/
+
+# Output files generated at runtime
+output.json
