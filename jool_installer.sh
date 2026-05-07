@@ -84,11 +84,61 @@ ensure_kernel_headers_valid() {
   local running_kernel
   local kdir
   local header_kernel
+  local header_pkg
+  local header_ver
+  local found_kernel_pkg=0
+  local kernel_pkg
+  local kernel_ver
+  local kernel_pkg_candidates
 
   running_kernel="$(uname -r)"
   kdir="/lib/modules/${running_kernel}/build"
+  header_pkg="linux-headers-${running_kernel}"
+  kernel_pkg_candidates=(
+    "linux-image-${running_kernel}"
+    "linux-image-unsigned-${running_kernel}"
+    "linux-modules-${running_kernel}"
+  )
 
   log "Validating kernel headers for running kernel: ${running_kernel}"
+
+  # Header package for the exact running kernel must exist.
+  if ! dpkg -s "$header_pkg" >/dev/null 2>&1; then
+    warn "Missing package ${header_pkg}. Installing now."
+    $SUDO apt-get install -y "$header_pkg" || true
+  fi
+
+  dpkg -s "$header_pkg" >/dev/null 2>&1 || die "Required header package missing: ${header_pkg}"
+
+  header_ver="$(dpkg-query -W -f='${Version}' "$header_pkg" 2>/dev/null || true)"
+  [[ -n "$header_ver" ]] || die "Unable to read version for ${header_pkg}"
+
+  # At least one matching running-kernel package must exist and share the same package version.
+  for kernel_pkg in "${kernel_pkg_candidates[@]}"; do
+    if dpkg -s "$kernel_pkg" >/dev/null 2>&1; then
+      found_kernel_pkg=1
+      kernel_ver="$(dpkg-query -W -f='${Version}' "$kernel_pkg" 2>/dev/null || true)"
+      [[ -n "$kernel_ver" ]] || die "Unable to read version for ${kernel_pkg}"
+      if [[ "$kernel_ver" != "$header_ver" ]]; then
+        cat >&2 <<EOF
+[ERROR] Ubuntu kernel package and header package mismatch detected.
+Running kernel            : ${running_kernel}
+Kernel package            : ${kernel_pkg}
+Kernel package version    : ${kernel_ver}
+Header package            : ${header_pkg}
+Header package version    : ${header_ver}
+
+Fix:
+1) Ensure matching Ubuntu kernel and headers are installed.
+2) Reboot into the intended kernel.
+3) Re-run this installer.
+EOF
+        exit 1
+      fi
+    fi
+  done
+
+  [[ "$found_kernel_pkg" -eq 1 ]] || die "No Ubuntu kernel package found for running kernel ${running_kernel}"
 
   if [[ ! -d "$kdir" ]]; then
     warn "Headers not found at $kdir. Installing linux-headers-${running_kernel}."
