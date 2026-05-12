@@ -1,17 +1,29 @@
 #!/bin/bash
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DATA_SH="$SCRIPT_DIR/data.sh"
+
+[[ -f "$DATA_SH" ]] || { echo "❌ $DATA_SH not found"; exit 1; }
+source "$DATA_SH"
+
 ############################################
 # EXPECTED CONFIG
 ############################################
 
 INSTANCE="BR"
 
-EXP_V6="2600:8809:a504::/46"
-EXP_V4="192.168.12.0/24"
-EXP_EA="14"
+EXP_V6="${V6_RULE_PREFIX:-}"
+EXP_V4="${V4_PREFIX:-}/${V4_PLEN:-}"
+EXP_EA="${EA_LEN:-}"
 EXP_A="4"
-EXP_DMR="2600:8809:bfff:ffff::/64"
+EXP_DMR="${DMR:-}"
+
+[[ -n "$EXP_V6" && "$EXP_V6" != "null" ]] || { echo "❌ Invalid V6_RULE_PREFIX from data.sh: $EXP_V6"; exit 1; }
+[[ -n "${V4_PREFIX:-}" && "${V4_PREFIX:-}" != "null" ]] || { echo "❌ Invalid V4_PREFIX from data.sh: ${V4_PREFIX:-}"; exit 1; }
+[[ -n "${V4_PLEN:-}" && "${V4_PLEN:-}" != "null" ]] || { echo "❌ Invalid V4_PLEN from data.sh: ${V4_PLEN:-}"; exit 1; }
+[[ -n "$EXP_EA" && "$EXP_EA" != "null" ]] || { echo "❌ Invalid EA_LEN from data.sh: $EXP_EA"; exit 1; }
+[[ -n "$EXP_DMR" && "$EXP_DMR" != "null" ]] || { echo "❌ Invalid DMR from data.sh: $EXP_DMR"; exit 1; }
 
 echo "🩺 Validating JOOL MAP-T configuration..."
 
