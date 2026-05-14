@@ -9,6 +9,8 @@ TOPIC_STATUS   = "rpi_jool/status"
 TOPIC_OUTPUT   = "rpi_jool/output"
 TOPIC_SERVICES = "rpi_jool/services_status"
 
+HEALTH_INTERVAL = int(os.environ.get("HEALTH_INTERVAL", "30"))
+
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 client = mqtt.Client()
@@ -53,13 +55,13 @@ def publish_status(state):
 
 # -----------------------------
 def health_loop():
-    """Broadcast service health every 5 seconds."""
+    """Broadcast service health every HEALTH_INTERVAL seconds."""
     while True:
         try:
             publish_services()
         except Exception as e:
             print("health_loop error:", e)
-        time.sleep(5)
+        time.sleep(HEALTH_INTERVAL)
 
 # -----------------------------
 def on_connect(client, userdata, flags, rc):
@@ -112,11 +114,22 @@ def on_message(client, userdata, msg):
         publish_status("error")
 
 # -----------------------------
+def connect_with_retry():
+    """Keep trying to connect instead of exiting the process."""
+    while True:
+        try:
+            client.connect(BROKER, PORT)
+            return
+        except Exception as e:
+            print("connect error:", e)
+            time.sleep(15)
+
+# -----------------------------
 client.on_connect = on_connect
 client.on_message = on_message
 
 # Start health broadcast thread (every 5 s)
 threading.Thread(target=health_loop, daemon=True).start()
 
-client.connect(BROKER, PORT)
+connect_with_retry()
 client.loop_forever()

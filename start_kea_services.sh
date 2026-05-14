@@ -11,8 +11,6 @@ echo "--------------------------------"
 
 FAILED=0
 
-sudo netplan apply
-
 for svc in "${SERVICES[@]}"; do
   echo "Restarting $svc ..."
   systemctl restart "$svc"
@@ -68,7 +66,3 @@ WAN_IFACE="eth0"
 
 #ensure_single_masquerade_rule iptables $WAN_IFACE
 ensure_single_masquerade_rule ip6tables $WAN_IFACE
-
-netfilter-persistent save
-
-sudo netplan apply

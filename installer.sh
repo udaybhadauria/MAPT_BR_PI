@@ -8,7 +8,7 @@ VENV_DIR="$BASE_DIR/ui_venv"
 PKGS=(
   curl tcpdump mosquitto mosquitto-clients jq yq iproute2 net-tools
   radvd kea-dhcp6-server kea-dhcp4-server apparmor-utils
-  iptables-persistent openssh-server python3-venv
+  iptables-persistent openssh-server python3-venv cron
 )
 
 SERVICES=(
@@ -78,6 +78,42 @@ enable_and_start_services() {
   if [[ "$failed" -ne 0 ]]; then
     log "Continuing bootstrap. Service health will be recovered by apply_config/managed checks."
   fi
+}
+
+configure_cron_jobs() {
+  log "Ensuring cron service is enabled"
+  systemctl enable cron || echo "WARN: Failed to enable cron service"
+  systemctl start cron || echo "WARN: Failed to start cron service"
+
+  log "Configuring cron schedule"
+  bash "$BASE_DIR/scheduler_cron.sh"
+
+  log "Verifying required cron jobs"
+  local required_jobs=(
+    "@reboot (sleep 120; /bin/bash"
+    "* * * * * /bin/bash"
+    "*/5 * * * * /bin/bash"
+    "*/15 * * * * /bin/bash"
+    "0 4 */2 * * (echo '[CRON] BR_PI periodic reboot for fresh network session'; /sbin/reboot)"
+  )
+
+  local current_cron
+  current_cron="$(crontab -l 2>/dev/null || true)"
+  local missing=0
+
+  for job in "${required_jobs[@]}"; do
+    if ! grep -Fq "$job" <<< "$current_cron"; then
+      echo "ERROR: Missing required cron entry pattern: $job"
+      missing=1
+    fi
+  done
+
+  if [[ "$missing" -ne 0 ]]; then
+    exit 1
+  fi
+
+  log "Installed cron entries:"
+  crontab -l
 }
 
 configure_mosquitto() {
@@ -194,12 +230,12 @@ main() {
   ensure_cmd apt-get
   ensure_cmd dpkg
   ensure_cmd systemctl
-  ensure_cmd crontab
-  ensure_cmd ss
 
   log "Starting non-interactive installation from $BASE_DIR"
 
   install_apt_packages
+  ensure_cmd crontab
+  ensure_cmd ss
   make_scripts_executable
   create_or_update_venv
   verify_python_deps
@@ -211,8 +247,7 @@ main() {
   log "Configuring systemd services"
   bash "$BASE_DIR/managed_services.sh"
 
-  log "Configuring cron schedule"
-  bash "$BASE_DIR/scheduler_cron.sh"
+  configure_cron_jobs
 
   log "Setting up root password (for direct root login if needed)"
   passwd root

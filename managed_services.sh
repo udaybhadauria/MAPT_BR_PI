@@ -20,8 +20,10 @@ echo "🔍 Validating environment..."
 # Sanity checks
 # -----------------------------
 if [[ ! -d "$VENV" ]]; then
-  echo "❌ ERROR: Virtualenv not found: $VENV"
-  exit 1
+  echo "⚠️ Virtualenv not found at $VENV"
+  echo "🛠 Creating virtualenv..."
+  command -v python3 >/dev/null 2>&1 || { echo "❌ ERROR: python3 is required to create $VENV"; exit 1; }
+  python3 -m venv "$VENV"
 fi
 
 if [[ ! -x "$PYTHON" ]]; then
@@ -55,21 +57,23 @@ fi
 # -----------------------------
 # Create mqtt-agent systemd service
 # -----------------------------
-if [[ ! -f "$APP_SERVICE" ]]; then
-  echo "🛠 Creating mqtt-agent.service..."
+echo "🛠 Installing mqtt-agent.service..."
 
-  cat > "$APP_SERVICE" <<EOF
+cat > "$APP_SERVICE" <<EOF
 [Unit]
 Description=BR PI MQTT Agent (Python)
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
 WorkingDirectory=$BASE_DIR
+Environment=HEALTH_INTERVAL=30
 ExecStart=$PYTHON $APP_PY
 Restart=always
-RestartSec=5
+RestartSec=20
 
 StandardOutput=journal
 StandardError=journal
@@ -80,27 +84,25 @@ TimeoutStopSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-else
-  echo "✅ mqtt-agent.service already exists"
-fi
 
 # -----------------------------
 # Create watchdog systemd service
 # -----------------------------
-if [[ ! -f "$WATCHDOG_SERVICE" ]]; then
-  echo "🛠 Creating watchdog-routers.service..."
+echo "🛠 Installing watchdog-routers.service..."
 
-  cat > "$WATCHDOG_SERVICE" <<EOF
+cat > "$WATCHDOG_SERVICE" <<EOF
 [Unit]
 Description=BR PI Watchdog (continuous)
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
 ExecStart=$WATCHDOG_SH
 Restart=always
-RestartSec=5
+RestartSec=20
 
 StandardOutput=journal
 StandardError=journal
@@ -111,9 +113,6 @@ TimeoutStopSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-else
-  echo "✅ watchdog-routers.service already exists"
-fi
 
 # -----------------------------
 # Reload & manage services

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+SCRIPT_DIR=$(dirname "$(realpath "$0")")
+
 timestamp=$(date +%s)
 
 cat <<EOF > "$SCRIPT_DIR/services_status.json"

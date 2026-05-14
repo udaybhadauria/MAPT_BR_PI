@@ -83,9 +83,9 @@ recover_network_stack() {
   sudo sysctl -w net.ipv6.conf.eth0.autoconf=1 >/dev/null || true
 
   echo "🔧 Running: netplan apply"
-  sudo netplan apply || true
+  #sudo netplan apply || true
 
-  sleep 3
+  #sleep 3
 
   for svc in kea-dhcp4-server kea-dhcp6-server radvd; do
     echo "🔁 Restarting $svc"

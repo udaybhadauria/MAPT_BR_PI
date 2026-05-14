@@ -3,9 +3,12 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DATA_SH="$SCRIPT_DIR/data.sh"
+REBUILD_SH="$SCRIPT_DIR/rebuild_jool.sh"
+REBUILD_LOCK="/tmp/jool_rebuild.lock"
 
 [[ -f "$DATA_SH" ]] || { echo "❌ $DATA_SH not found"; exit 1; }
 source "$DATA_SH"
+[[ -f "$REBUILD_SH" ]] || { echo "❌ $REBUILD_SH not found"; exit 1; }
 
 ############################################
 # EXPECTED CONFIG
@@ -35,6 +38,71 @@ module_loaded() {
   lsmod | awk '{print $1}' | grep -qx "$1"
 }
 
+module_matches_running_kernel() {
+  local module="$1"
+  local kver
+  local vermagic
+
+  kver="$(uname -r)"
+  vermagic="$(modinfo -F vermagic "$module" 2>/dev/null | head -n1 || true)"
+
+  [[ -n "$vermagic" ]] && [[ "$vermagic" == "$kver"* ]]
+}
+
+wait_for_rebuild_lock() {
+  local waited=0
+  local max_wait=600
+
+  while [[ -d "$REBUILD_LOCK" ]] && [[ "$waited" -lt "$max_wait" ]]; do
+    echo "⏳ Waiting for ongoing JOOL rebuild lock to clear... (${waited}s/${max_wait}s)"
+    sleep 5
+    waited=$((waited + 5))
+  done
+
+  if [[ -d "$REBUILD_LOCK" ]]; then
+    echo "❌ Timed out waiting for JOOL rebuild lock: $REBUILD_LOCK"
+    exit 1
+  fi
+}
+
+ensure_kernel_compatible_modules() {
+  local required_modules=(jool_common jool jool_mapt)
+  local mismatch=0
+
+  echo "🔎 Checking JOOL module/kernel compatibility..."
+  for module in "${required_modules[@]}"; do
+    if module_matches_running_kernel "$module"; then
+      echo "✅ $module matches running kernel $(uname -r)"
+    else
+      echo "⚠️  Kernel mismatch or missing module metadata for: $module"
+      mismatch=1
+    fi
+  done
+
+  if [[ "$mismatch" -eq 0 ]]; then
+    return 0
+  fi
+
+  if mkdir "$REBUILD_LOCK" 2>/dev/null; then
+    trap 'rmdir "$REBUILD_LOCK" >/dev/null 2>&1 || true' EXIT
+    echo "🛠 Kernel mismatch detected. Rebuilding JOOL modules..."
+    bash "$REBUILD_SH"
+    rmdir "$REBUILD_LOCK" >/dev/null 2>&1 || true
+    trap - EXIT
+  else
+    wait_for_rebuild_lock
+  fi
+
+  for module in "${required_modules[@]}"; do
+    if ! module_matches_running_kernel "$module"; then
+      echo "❌ $module still mismatched after rebuild"
+      exit 1
+    fi
+  done
+
+  echo "✅ JOOL modules now match running kernel"
+}
+
 ensure_modules() {
   local required_modules=(jool jool_mapt jool_common)
   local need_load=0
@@ -49,6 +117,13 @@ ensure_modules() {
       echo "⚙️  Loading module: $module"
       modprobe "$module"
       need_load=1
+    fi
+  done
+
+  for module in "${required_modules[@]}"; do
+    if ! module_loaded "$module"; then
+      echo "❌ Module failed to load: $module"
+      exit 1
     fi
   done
 
@@ -83,6 +158,7 @@ rebuild_instance() {
 # 1️⃣ Kernel modules + instance health
 ############################################
 
+ensure_kernel_compatible_modules
 ensure_modules
 ensure_instance
 
